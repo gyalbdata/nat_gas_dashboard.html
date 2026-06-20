@@ -2,7 +2,7 @@
 
 Estimate natural gas purchase prices for any date — past or up to a year into the future — using a trend + seasonality regression model fit on historical month-end prices.
 
-**[→ View the live dashboard](https://yourusername.github.io/your-repo-name/)**
+**[→ View the live dashboard](https://gyalbdata.github.io/nat_gas_dashboard.html/)**
 
 ---
 
@@ -30,7 +30,7 @@ The dashboard surfaces the model's output visually:
 - **Spot-check estimator** — enter any date and get an instant price estimate
 - **Year-over-year change** — month-by-month % change vs. the prior year
 
-→ **[Open the live dashboard](https://yourusername.github.io/your-repo-name/)**
+→ **[Open the live dashboard](https://gyalbdata.github.io/nat_gas_dashboard.html/)**
 
 ---
 
