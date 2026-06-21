@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Henry Hub Natural Gas — Price Model Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #14110f;
+    --panel: #1b1714;
+    --panel-2: #211c18;
+    --line: #332c26;
+    --flame: #ff7a1a;
+    --flame-2: #ffb454;
+    --ember: #c0392b;
+    --cool: #5fb3c7;
+    --text: #f3ece2;
+    --text-dim: #b3a89b;
+    --text-faint: #756a5e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(ellipse 1200px 600px at 50% -10%, #251d16 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 0;
+  }
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 48px 28px 64px; }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 36px;
+    flex-wrap: wrap; gap: 20px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.16em;
+    text-transform:uppercase; color: var(--flame); margin: 0 0 10px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{
+    content:''; width:7px; height:7px; border-radius:50%; background: var(--flame);
+    box-shadow: 0 0 10px 2px var(--flame);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  h1{
+    font-family:'Big Shoulders Display', sans-serif; font-weight:800;
+    font-size: 50px; line-height: 0.96; margin:0; letter-spacing: -0.01em;
+    text-transform: uppercase;
+  }
+  h1 span{ color: var(--text-dim); }
+  .meta{
+    font-family:'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-faint);
+    text-align:right; line-height:1.7;
+  }
+  .meta b{ color: var(--text-dim); font-weight:500; }
+
+  /* ---------- KPI row ---------- */
+  .kpis{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line); border:1px solid var(--line); border-radius: 10px;
+    overflow:hidden; margin-bottom: 40px;
+  }
+  .kpi{ background: var(--panel); padding: 22px 24px; }
+  .kpi .label{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color: var(--text-faint); margin-bottom:10px;
+  }
+  .kpi .value{
+    font-family:'Big Shoulders Display', sans-serif; font-weight:700; font-size: 30px;
+    color: var(--text); line-height:1;
+  }
+  .kpi .sub{ font-size:12.5px; color: var(--text-dim); margin-top:6px; }
+  .kpi .sub.up{ color: var(--flame-2); }
+  .kpi .sub.down{ color: var(--cool); }
+
+  /* ---------- Panels ---------- */
+  .panel{
+    background: var(--panel); border:1px solid var(--line); border-radius: 12px;
+    padding: 28px 28px 20px; margin-bottom: 28px;
+  }
+  .panel-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 6px; flex-wrap:wrap; gap:10px;}
+  .panel-title{
+    font-family:'Big Shoulders Display', sans-serif; font-weight:700; font-size: 22px;
+    text-transform: uppercase; letter-spacing:.01em;
+  }
+  .panel-sub{ font-size: 13px; color: var(--text-dim); margin: 0 0 18px; max-width: 640px;}
+  .legend{ display:flex; gap:18px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; color: var(--text-dim); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+
+  .chart-box{ position:relative; height: 360px; }
+  .chart-box.small{ height: 300px; }
+
+  .grid-2{ display:grid; grid-template-columns: 1.15fr 1fr; gap: 28px; }
+  @media (max-width: 880px){
+    .grid-2{ grid-template-columns: 1fr; }
+    .kpis{ grid-template-columns: repeat(2,1fr); }
+    h1{ font-size: 38px; }
+  }
+
+  /* ---------- Dial (seasonal cycle) ---------- */
+  .dial-wrap{ display:flex; flex-direction:column; align-items:center; }
+  .dial-readout{ display:flex; gap: 22px; margin-top: 6px; flex-wrap:wrap; justify-content:center;}
+  .dial-readout div{ text-align:center; }
+  .dial-readout .l{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em;}
+  .dial-readout .v{ font-family:'Big Shoulders Display', sans-serif; font-size:20px; font-weight:700; color:var(--flame-2);}
+
+  /* ---------- Estimator ---------- */
+  .estimator{ display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+  .estimator label{ font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); display:block; margin-bottom:8px; }
+  .estimator input{
+    background: var(--panel-2); border:1px solid var(--line); color: var(--text);
+    font-family:'IBM Plex Mono', monospace; font-size:14px; padding:10px 12px; border-radius:7px;
+    outline:none;
+  }
+  .estimator input:focus{ border-color: var(--flame); }
+  .estimator .result{
+    font-family:'Big Shoulders Display', sans-serif; font-size: 26px; font-weight:700;
+    padding: 9px 18px; border-radius: 8px; background: linear-gradient(135deg, rgba(255,122,26,.18), rgba(255,122,26,.04));
+    border: 1px solid rgba(255,122,26,.35); color: var(--flame-2); min-width: 110px; text-align:center;
+  }
+  .estimator .tag{
+    font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint);
+    text-transform:uppercase; letter-spacing:.06em; margin-top:8px;
+  }
+
+  /* ---------- Methodology ---------- */
+  .method{ font-size: 13.5px; color: var(--text-dim); line-height:1.75; }
+  .method code{ font-family:'IBM Plex Mono', monospace; font-size:12px; background: var(--panel-2); padding:2px 6px; border-radius:4px; color: var(--flame-2); }
+  .method-cols{ display:grid; grid-template-columns: repeat(3,1fr); gap:24px; margin-top:18px;}
+  .method-cols .n{ font-family:'IBM Plex Mono', monospace; color: var(--flame); font-size:12px; letter-spacing:.1em; margin-bottom:6px; display:block;}
+  @media (max-width: 880px){ .method-cols{ grid-template-columns:1fr; } }
+
+  footer{ text-align:center; color: var(--text-faint); font-family:'IBM Plex Mono', monospace; font-size:11.5px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow">Commodity Price Model · Live Estimate</p>
+      <h1>Natural Gas<br><span>Price Forecast</span></h1>
+    </div>
+    <div class="meta">
+      <div><b>Series:</b> Month-end purchase price</div>
+      <div><b>History:</b> 31 Oct 2020 → 30 Sep 2024</div>
+      <div><b>Forecast horizon:</b> +12 months</div>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpiRow"></div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Price History &amp; Forward Curve</div>
+        <p class="panel-sub">Observed month-end prices fit with a linear trend plus a two-harmonic seasonal model, projected one year beyond the last recorded observation.</p>
+      </div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--flame-2)"></i>Observed</span>
+        <span><i class="swatch" style="background:var(--cool); border-top:2px dashed var(--cool); height:0;"></i>Forecast</span>
+        <span><i class="swatch" style="background:rgba(95,179,199,.25)"></i>Seasonal band</span>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="mainChart"></canvas></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Seasonal Demand Cycle</div>
+          <p class="panel-sub">Average deviation from trend by calendar month — the burner dial of winter heating demand versus summer easing.</p>
+        </div>
+      </div>
+      <div class="dial-wrap">
+        <div class="chart-box small" style="width:100%; max-width:320px;"><canvas id="dialChart"></canvas></div>
+        <div class="dial-readout">
+          <div><div class="l">Peak month</div><div class="v" id="peakMonth">—</div></div>
+          <div><div class="l">Trough month</div><div class="v" id="troughMonth">—</div></div>
+          <div><div class="l">Swing</div><div class="v" id="swingVal">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Spot-Check Estimator</div>
+          <p class="panel-sub">Enter any date — historical or up to one year ahead — to query the fitted model directly.</p>
+        </div>
+      </div>
+      <div class="estimator">
+        <div>
+          <label for="dateInput">Target date</label>
+          <input type="date" id="dateInput" min="2020-10-31" max="2025-09-30" value="2025-01-31">
+        </div>
+        <div class="result" id="estResult">$—</div>
+      </div>
+      <div class="tag" id="estTag">&nbsp;</div>
+
+      <div style="margin-top:28px; border-top:1px solid var(--line); padding-top:20px;">
+        <div class="panel-title" style="font-size:16px; margin-bottom:10px;">Year-over-Year</div>
+        <div class="chart-box small"><canvas id="yoyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title" style="margin-bottom:10px;">Methodology</div>
+    <p class="method">
+      Prices are modeled as <code>price(t) = a + b·t + c₁sin(ωt) + c₂cos(ωt) + c₃sin(2ωt) + c₄cos(2ωt)</code>,
+      fit by ordinary least squares on 48 month-end observations, where <code>t</code> is days since the first
+      record and <code>ω = 2π / 365.25</code>. In-sample dates are answered by direct linear interpolation
+      between the two nearest real observations; only dates beyond the historical record fall back to the
+      fitted curve.
+    </p>
+    <div class="method-cols">
+      <div>
+        <span class="n">01 / TREND</span>
+        A persistent multi-year increase in average price, driven by the linear term.
+      </div>
+      <div>
+        <span class="n">02 / SEASONALITY</span>
+        A repeating annual cycle — winter heating demand pushes prices up, summer eases them down.
+      </div>
+      <div>
+        <span class="n">03 / HORIZON</span>
+        Extrapolation is capped at one year past the last observation, beyond which model confidence is not assumed.
+      </div>
+    </div>
+  </div>
+
+  <footer>HENRY HUB MODEL · LEAST-SQUARES TREND + FOURIER SEASONALITY · FOR ESTIMATION PURPOSES ONLY</footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Embedded historical data (from Nat_Gas.csv)
+// ---------------------------------------------------------------
+const HIST = [{"date":"2020-10-31","price":10.1},{"date":"2020-11-30","price":10.3},{"date":"2020-12-31","price":11.0},{"date":"2021-01-31","price":10.9},{"date":"2021-02-28","price":10.9},{"date":"2021-03-31","price":10.9},{"date":"2021-04-30","price":10.4},{"date":"2021-05-31","price":9.84},{"date":"2021-06-30","price":10.0},{"date":"2021-07-31","price":10.1},{"date":"2021-08-31","price":10.3},{"date":"2021-09-30","price":10.2},{"date":"2021-10-31","price":10.1},{"date":"2021-11-30","price":11.2},{"date":"2021-12-31","price":11.4},{"date":"2022-01-31","price":11.5},{"date":"2022-02-28","price":11.8},{"date":"2022-03-31","price":11.5},{"date":"2022-04-30","price":10.7},{"date":"2022-05-31","price":10.7},{"date":"2022-06-30","price":10.4},{"date":"2022-07-31","price":10.5},{"date":"2022-08-31","price":10.4},{"date":"2022-09-30","price":10.8},{"date":"2022-10-31","price":11.0},{"date":"2022-11-30","price":11.6},{"date":"2022-12-31","price":11.6},{"date":"2023-01-31","price":12.1},{"date":"2023-02-28","price":11.7},{"date":"2023-03-31","price":12.0},{"date":"2023-04-30","price":11.5},{"date":"2023-05-31","price":11.2},{"date":"2023-06-30","price":10.9},{"date":"2023-07-31","price":11.4},{"date":"2023-08-31","price":11.1},{"date":"2023-09-30","price":11.5},{"date":"2023-10-31","price":11.8},{"date":"2023-11-30","price":12.2},{"date":"2023-12-31","price":12.8},{"date":"2024-01-31","price":12.6},{"date":"2024-02-29","price":12.4},{"date":"2024-03-31","price":12.7},{"date":"2024-04-30","price":12.1},{"date":"2024-05-31","price":11.4},{"date":"2024-06-30","price":11.5},{"date":"2024-07-31","price":11.6},{"date":"2024-08-31","price":11.5},{"date":"2024-09-30","price":11.8}];
+
+// Coefficients from OLS fit: [a, b, c1, c2, c3, c4]
+const COEFFS = [10.140919210484315, 0.0014873198133665464, 0.6864791253886423, -0.026456677074036396, -0.044238854511335586, -0.07984309482807053];
+const FIRST_DATE = new Date("2020-10-31T00:00:00Z");
+const LAST_DATE = new Date("2024-09-30T00:00:00Z");
+const MAX_DATE = new Date("2025-09-30T00:00:00Z");
+const OMEGA = 2 * Math.PI / 365.25;
+
+function daysSince(d){ return (d - FIRST_DATE) / 86400000; }
+
+function modelPredict(t){
+  const [a,b,c1,c2,c3,c4] = COEFFS;
+  return a + b*t + c1*Math.sin(OMEGA*t) + c2*Math.cos(OMEGA*t) + c3*Math.sin(2*OMEGA*t) + c4*Math.cos(2*OMEGA*t);
+}
+
+function interp(t, xs, ys){
+  if (t <= xs[0]) return ys[0];
+  if (t >= xs[xs.length-1]) return ys[ys.length-1];
+  for (let i=0;i<xs.length-1;i++){
+    if (t >= xs[i] && t <= xs[i+1]){
+      const frac = (t - xs[i]) / (xs[i+1] - xs[i]);
+      return ys[i] + frac*(ys[i+1]-ys[i]);
+    }
+  }
+  return ys[ys.length-1];
+}
+
+const histX = HIST.map(d => daysSince(new Date(d.date+"T00:00:00Z")));
+const histY = HIST.map(d => d.price);
+
+function estimatePrice(dateStr){
+  const d = new Date(dateStr+"T00:00:00Z");
+  if (d < FIRST_DATE || d > MAX_DATE) return null;
+  const t = daysSince(d);
+  if (d <= LAST_DATE) return interp(t, histX, histY);
+  return modelPredict(t);
+}
+
+// ---------------------------------------------------------------
+// Build forecast series (1 year past last observation, monthly)
+// ---------------------------------------------------------------
+const FORECAST = [];
+for (let i=1; i<=12; i++){
+  const d = new Date(LAST_DATE);
+  d.setUTCMonth(d.getUTCMonth() + i);
+  // snap to month-end
+  d.setUTCMonth(d.getUTCMonth()+1, 0);
+  const t = daysSince(d);
+  FORECAST.push({ date: d.toISOString().slice(0,10), price: modelPredict(t) });
+}
+
+// ---------------------------------------------------------------
+// Chart.js global defaults (themed)
+// ---------------------------------------------------------------
+Chart.defaults.color = "#b3a89b";
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = "#332c26";
+
+// ---------------------------------------------------------------
+// Main chart: history + forecast
+// ---------------------------------------------------------------
+const allLabels = HIST.map(d=>d.date).concat(FORECAST.map(d=>d.date));
+const histSeries = HIST.map(d=>d.price).concat(Array(FORECAST.length).fill(null));
+const connector = Array(HIST.length-1).fill(null).concat([HIST[HIST.length-1].price]).concat(FORECAST.map(d=>d.price));
+
+new Chart(document.getElementById('mainChart'), {
+  type: 'line',
+  data: {
+    labels: allLabels,
+    datasets: [
+      {
+        label: 'Observed',
+        data: histSeries,
+        borderColor: '#ffb454',
+        backgroundColor: 'rgba(255,122,26,0.12)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2.5,
+      },
+      {
+        label: 'Forecast',
+        data: connector,
+        borderColor: '#5fb3c7',
+        borderDash: [6,4],
+        backgroundColor: 'rgba(95,179,199,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2.5,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#211c18', borderColor: '#332c26', borderWidth: 1,
+        titleColor: '#f3ece2', bodyColor: '#f3ece2', padding: 10,
+        callbacks: { label: (ctx) => ctx.raw != null ? ` $${ctx.raw.toFixed(2)}` : '' }
+      }
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10 }, grid: { color: '#221d19' } },
+      y: { ticks: { callback: v => '$'+v }, grid: { color: '#221d19' } }
+    }
+  }
+});
+
+// ---------------------------------------------------------------
+// Seasonal dial: avg deviation from trend per calendar month
+// ---------------------------------------------------------------
+const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const byMonth = Array.from({length:12}, ()=>[]);
+HIST.forEach(d=>{
+  const dt = new Date(d.date+"T00:00:00Z");
+  const t = daysSince(dt);
+  const trend = COEFFS[0] + COEFFS[1]*t;
+  byMonth[dt.getUTCMonth()].push(d.price - trend);
+});
+const monthAvg = byMonth.map(arr => arr.reduce((a,b)=>a+b,0)/arr.length);
+
+let peakIdx = 0, troughIdx = 0;
+monthAvg.forEach((v,i)=>{ if (v>monthAvg[peakIdx]) peakIdx=i; if (v<monthAvg[troughIdx]) troughIdx=i; });
+document.getElementById('peakMonth').textContent = monthNames[peakIdx];
+document.getElementById('troughMonth').textContent = monthNames[troughIdx];
+document.getElementById('swingVal').textContent = '$' + (monthAvg[peakIdx]-monthAvg[troughIdx]).toFixed(2);
+
+new Chart(document.getElementById('dialChart'), {
+  type: 'radar',
+  data: {
+    labels: monthNames,
+    datasets: [{
+      label: 'Avg deviation ($)',
+      data: monthAvg,
+      borderColor: '#ff7a1a',
+      backgroundColor: 'rgba(255,122,26,0.18)',
+      pointBackgroundColor: '#ffb454',
+      borderWidth: 2,
+      pointRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display:false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw>=0?'+':''}${ctx.raw.toFixed(2)}` } } },
+    scales: {
+      r: {
+        grid: { color: '#2a2420' },
+        angleLines: { color: '#2a2420' },
+        ticks: { display:false, backdropColor: 'transparent' },
+        pointLabels: { color: '#b3a89b', font: { size: 10.5 } }
+      }
+    }
+  }
+});
+
+// ---------------------------------------------------------------
+// YoY mini chart
+// ---------------------------------------------------------------
+const yoyLabels = [];
+const yoyVals = [];
+for (let i=12;i<HIST.length;i++){
+  yoyLabels.push(HIST[i].date.slice(0,7));
+  yoyVals.push(((HIST[i].price/HIST[i-12].price)-1)*100);
+}
+new Chart(document.getElementById('yoyChart'), {
+  type: 'bar',
+  data: {
+    labels: yoyLabels,
+    datasets: [{
+      data: yoyVals,
+      backgroundColor: yoyVals.map(v => v>=0 ? 'rgba(255,122,26,0.65)' : 'rgba(95,179,199,0.65)'),
+      borderRadius: 3,
+      barThickness: 6,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ` ${ctx.raw.toFixed(1)}%` } } },
+    scales: {
+      x: { ticks:{ maxTicksLimit:6 }, grid:{ display:false } },
+      y: { ticks: { callback: v=>v+'%' }, grid:{ color:'#221d19' } }
+    }
+  }
+});
+
+// ---------------------------------------------------------------
+// KPI row
+// ---------------------------------------------------------------
+const last = HIST[HIST.length-1];
+const prevYear = HIST[HIST.length-13];
+const yoyChange = ((last.price/prevYear.price)-1)*100;
+const oneYearOut = FORECAST[FORECAST.length-1];
+const allPrices = HIST.map(d=>d.price);
+const vol = Math.sqrt(allPrices.map((p,i,arr)=> i>0 ? Math.pow(p-arr[i-1],2):0).reduce((a,b)=>a+b,0)/(allPrices.length-1));
+
+const kpis = [
+  { label: 'Latest price', value: '$'+last.price.toFixed(2), sub: last.date, cls:'' },
+  { label: 'Year-over-year', value: (yoyChange>=0?'+':'')+yoyChange.toFixed(1)+'%', sub: 'vs '+prevYear.date, cls: yoyChange>=0?'up':'down' },
+  { label: '12-month forecast', value: '$'+oneYearOut.price.toFixed(2), sub: oneYearOut.date.slice(0,7), cls:'' },
+  { label: 'Monthly volatility', value: '$'+vol.toFixed(2), sub: 'std. dev of m/m change', cls:'' },
+];
+document.getElementById('kpiRow').innerHTML = kpis.map(k => `
+  <div class="kpi">
+    <div class="label">${k.label}</div>
+    <div class="value">${k.value}</div>
+    <div class="sub ${k.cls}">${k.sub}</div>
+  </div>
+`).join('');
+
+// ---------------------------------------------------------------
+// Estimator widget
+// ---------------------------------------------------------------
+const dateInput = document.getElementById('dateInput');
+const estResult = document.getElementById('estResult');
+const estTag = document.getElementById('estTag');
+
+function runEstimate(){
+  const v = dateInput.value;
+  if (!v){ estResult.textContent = '$—'; estTag.textContent=''; return; }
+  const price = estimatePrice(v);
+  if (price == null){
+    estResult.textContent = 'N/A';
+    estTag.textContent = 'Outside supported range (31-Oct-2020 → 30-Sep-2025)';
+    return;
+  }
+  estResult.textContent = '$' + price.toFixed(2);
+  const d = new Date(v+"T00:00:00Z");
+  estTag.textContent = d <= LAST_DATE ? 'Interpolated from observed data' : 'Extrapolated via trend + seasonal model';
+}
+dateInput.addEventListener('input', runEstimate);
+runEstimate();
+</script>
+</body>
+</html>
