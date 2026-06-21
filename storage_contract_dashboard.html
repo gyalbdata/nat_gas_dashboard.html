@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gas Storage Contract — Pricing Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#14110f; --panel:#1b1714; --panel-2:#211c18; --line:#332c26;
+    --flame:#ff7a1a; --flame-2:#ffb454; --cool:#5fb3c7; --bad:#e0584a;
+    --text:#f3ece2; --text-dim:#b3a89b; --text-faint:#756a5e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(ellipse 1200px 600px at 50% -10%, #251d16 0%, var(--bg) 55%);
+    color: var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 48px 28px 64px; }
+
+  header{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:32px; flex-wrap:wrap; gap:20px; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--flame); margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .eyebrow::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--flame); box-shadow:0 0 10px 2px var(--flame); animation:pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  h1{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:48px; line-height:.96; margin:0; letter-spacing:-.01em; text-transform:uppercase; }
+  h1 span{ color: var(--text-dim); }
+  .meta{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-faint); text-align:right; line-height:1.7; }
+  .meta b{ color: var(--text-dim); font-weight:500; }
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:26px 28px 22px; margin-bottom:26px; }
+  .panel-title{ font-family:'Big Shoulders Display',sans-serif; font-weight:700; font-size:21px; text-transform:uppercase; margin-bottom:4px; }
+  .panel-sub{ font-size:13px; color:var(--text-dim); margin:0 0 18px; max-width:680px; }
+
+  .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:26px; }
+  .grid-3{ display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
+  @media (max-width:880px){ .grid-2,.grid-3{ grid-template-columns:1fr; } h1{font-size:36px;} }
+
+  /* Global params */
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); }
+  .field input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    font-family:'IBM Plex Mono',monospace; font-size:13.5px; padding:9px 11px; border-radius:7px; outline:none; width:100%;
+  }
+  .field input:focus{ border-color: var(--flame); }
+
+  /* Event table */
+  table{ width:100%; border-collapse: collapse; font-family:'IBM Plex Mono',monospace; font-size:12.5px; }
+  thead th{ text-align:left; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; font-size:10.5px; padding:0 8px 10px; border-bottom:1px solid var(--line); }
+  tbody td{ padding:6px 8px; }
+  tbody tr{ border-bottom: 1px solid #221d19; }
+  tbody input, tbody select{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px; padding:7px 8px; border-radius:6px; outline:none; width:100%;
+  }
+  tbody input:focus, tbody select:focus{ border-color:var(--flame); }
+  .row-type-injection select{ color: var(--flame-2); }
+  .row-type-withdrawal select{ color: var(--cool); }
+  .del-btn{
+    background:none; border:1px solid var(--line); color:var(--text-faint); border-radius:6px;
+    width:28px; height:28px; cursor:pointer; font-size:14px; line-height:1;
+  }
+  .del-btn:hover{ border-color: var(--bad); color: var(--bad); }
+  .table-actions{ display:flex; gap:10px; margin-top:14px; }
+  .btn{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em;
+    padding:9px 16px; border-radius:7px; cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--text-dim);
+  }
+  .btn:hover{ border-color: var(--flame); color: var(--flame-2); }
+  .btn.primary{ background: linear-gradient(135deg, rgba(255,122,26,.22), rgba(255,122,26,.06)); border-color: rgba(255,122,26,.4); color: var(--flame-2); }
+
+  /* Result */
+  .result-banner{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
+    background: linear-gradient(135deg, rgba(255,122,26,.1), rgba(255,122,26,.02));
+    border:1px solid rgba(255,122,26,.3); border-radius:12px; padding:22px 26px; margin-bottom:26px;
+  }
+  .result-banner .label{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-faint); margin-bottom:6px; }
+  .result-banner .value{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:44px; line-height:1; }
+  .result-banner .value.neg{ color: var(--bad); }
+  .result-banner .value.pos{ color: var(--flame-2); }
+  .result-banner .err{ color: var(--bad); font-family:'IBM Plex Mono',monospace; font-size:13px; }
+
+  .breakdown{ display:flex; gap:28px; flex-wrap:wrap; }
+  .breakdown div{ text-align:right; }
+  .breakdown .l{ font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; color:var(--text-faint); letter-spacing:.06em; }
+  .breakdown .v{ font-family:'IBM Plex Mono',monospace; font-size:15px; color:var(--text-dim); margin-top:3px; }
+
+  .chart-box{ position:relative; height:300px; }
+
+  footer{ text-align:center; color:var(--text-faint); font-family:'IBM Plex Mono',monospace; font-size:11.5px; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow">Trading Desk Prototype · Manual Oversight</p>
+      <h1>Storage Contract<br><span>Valuation Engine</span></h1>
+    </div>
+    <div class="meta">
+      <div><b>Model:</b> Multi-date inject/withdraw cashflow</div>
+      <div><b>Rates:</b> Zero interest, no transport delay</div>
+      <div><b>Status:</b> Prototype — pending validation</div>
+    </div>
+  </header>
+
+  <div class="result-banner">
+    <div>
+      <div class="label">Contract Value</div>
+      <div class="value" id="contractValue">$0</div>
+      <div class="err" id="errMsg"></div>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Facility Parameters</div>
+    <p class="panel-sub">Physical and commercial constraints of the storage facility used in this contract.</p>
+    <div class="grid-3">
+      <div class="field"><label>Max injection/withdrawal rate (units/event)</label><input type="number" id="maxRate" value="1000000"></div>
+      <div class="field"><label>Max storage volume (units)</label><input type="number" id="maxVol" value="1000000"></div>
+      <div class="field"><label>Storage cost ($ / month)</label><input type="number" id="storageCost" value="80000"></div>
+      <div class="field"><label>Injection/withdrawal fee ($ / unit)</label><input type="number" id="handlingFee" value="0.01" step="0.001"></div>
+      <div class="field"><label>Other cost per event ($, e.g. transport)</label><input type="number" id="otherCost" value="50000"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Injection &amp; Withdrawal Schedule</div>
+    <p class="panel-sub">Add every date the client injects (buys &amp; stores) or withdraws (sells) gas, with the volume and market price on that date.</p>
+    <table>
+      <thead><tr><th style="width:14%">Date</th><th style="width:16%">Action</th><th style="width:18%">Volume</th><th style="width:16%">Price ($/unit)</th><th></th></tr></thead>
+      <tbody id="eventRows"></tbody>
+    </table>
+    <div class="table-actions">
+      <button class="btn" id="addInjection">+ Add Injection</button>
+      <button class="btn" id="addWithdrawal">+ Add Withdrawal</button>
+      <button class="btn primary" id="recalc">Recalculate</button>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">Storage Volume Over Time</div>
+      <p class="panel-sub">Running inventory level in the facility across the contract's events.</p>
+      <div class="chart-box"><canvas id="volumeChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Cumulative Cash Flow</div>
+      <p class="panel-sub">Running net cash position as injections (outflows) and withdrawals (inflows) occur.</p>
+      <div class="chart-box"><canvas id="cashChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Methodology</div>
+    <p class="panel-sub" style="margin-bottom:0;">
+      Contract value = (revenue from withdrawals) − (cost of injections) − (storage cost × months held) − (injection/withdrawal handling fees) − (other per-event costs).
+      Events are processed chronologically; injections fill storage up to capacity, withdrawals draw down available inventory.
+      Any event that breaches the rate limit, storage capacity, or available inventory is flagged as invalid rather than silently priced.
+    </p>
+  </div>
+
+  <footer>STORAGE CONTRACT VALUATION ENGINE · ZERO-RATE, NO-DELAY ASSUMPTION · PROTOTYPE FOR DESK USE WITH MANUAL OVERSIGHT</footer>
+</div>
+
+<script>
+let rowId = 0;
+const tbody = document.getElementById('eventRows');
+
+function addRow(type, date, volume, price){
+  rowId++;
+  const tr = document.createElement('tr');
+  tr.className = 'row-type-' + type;
+  tr.dataset.id = rowId;
+  tr.innerHTML = `
+    <td><input type="date" class="ev-date" value="${date}"></td>
+    <td><select class="ev-type">
+      <option value="injection" ${type==='injection'?'selected':''}>Injection (buy)</option>
+      <option value="withdrawal" ${type==='withdrawal'?'selected':''}>Withdrawal (sell)</option>
+    </select></td>
+    <td><input type="number" class="ev-volume" value="${volume}"></td>
+    <td><input type="number" class="ev-price" value="${price}" step="0.01"></td>
+    <td><button class="del-btn" title="Remove">×</button></td>
+  `;
+  tr.querySelector('.del-btn').addEventListener('click', () => { tr.remove(); compute(); });
+  tr.querySelectorAll('input,select').forEach(el => el.addEventListener('change', compute));
+  tr.querySelector('.ev-type').addEventListener('change', (e) => {
+    tr.className = 'row-type-' + e.target.value;
+  });
+  tbody.appendChild(tr);
+}
+
+document.getElementById('addInjection').addEventListener('click', () => { addRow('injection','2023-06-30',500000,2.00); compute(); });
+document.getElementById('addWithdrawal').addEventListener('click', () => { addRow('withdrawal','2023-11-30',500000,3.20); compute(); });
+document.getElementById('recalc').addEventListener('click', compute);
+['maxRate','maxVol','storageCost','handlingFee','otherCost'].forEach(id => {
+  document.getElementById(id).addEventListener('change', compute);
+});
+
+// Seed with a realistic profitable seasonal trade:
+// buy when gas is cheap in early summer, sell when it spikes in winter
+addRow('injection', '2023-06-30', 1000000, 10.90);
+addRow('withdrawal', '2023-12-31', 1000000, 12.80);
+
+// ---------------------------------------------------------------
+// Pricing logic (mirrors price_storage_contract from the Python model)
+// ---------------------------------------------------------------
+function priceContract(events, maxRate, maxVol, storageCostPerMonth, handlingFeePerUnit, otherCostPerEvent){
+  const sorted = [...events].sort((a,b) => {
+    if (a.date < b.date) return -1;
+    if (a.date > b.date) return 1;
+    return a.type === 'injection' ? -1 : 1;
+  });
+
+  let currentVolume = 0;
+  let totalPurchase = 0, totalSale = 0, totalHandling = 0, totalOther = 0;
+  const timeline = [];
+  let cumCash = 0;
+
+  for (const ev of sorted){
+    if (ev.volume > maxRate){
+      throw new Error(`${ev.type} of ${ev.volume.toLocaleString()} on ${ev.date} exceeds max rate of ${maxRate.toLocaleString()}.`);
+    }
+    let cashFlow = 0;
+    if (ev.type === 'injection'){
+      const newVol = currentVolume + ev.volume;
+      if (newVol > maxVol) throw new Error(`Injection on ${ev.date} brings storage to ${newVol.toLocaleString()}, exceeding capacity of ${maxVol.toLocaleString()}.`);
+      cashFlow = -ev.volume * ev.price;
+      totalPurchase += ev.volume * ev.price;
+      currentVolume = newVol;
+    } else {
+      const newVol = currentVolume - ev.volume;
+      if (newVol < 0) throw new Error(`Withdrawal on ${ev.date} exceeds available storage (${currentVolume.toLocaleString()} on hand).`);
+      cashFlow = ev.volume * ev.price;
+      totalSale += ev.volume * ev.price;
+      currentVolume = newVol;
+    }
+    const handling = ev.volume * handlingFeePerUnit;
+    totalHandling += handling;
+    cashFlow -= handling;
+    cashFlow -= otherCostPerEvent;
+    totalOther += otherCostPerEvent;
+    cumCash += cashFlow;
+    timeline.push({ date: ev.date, volume: currentVolume, cumCash });
+  }
+
+  const first = new Date(sorted[0].date);
+  const last = new Date(sorted[sorted.length-1].date);
+  const monthsHeld = Math.max(1, (last.getFullYear()-first.getFullYear())*12 + (last.getMonth()-first.getMonth()) + 1);
+  const totalStorage = monthsHeld * storageCostPerMonth;
+
+  const contractValue = totalSale - totalPurchase - totalStorage - totalHandling - totalOther;
+
+  return { contractValue, totalPurchase, totalSale, totalStorage, totalHandling: totalHandling + totalOther, timeline };
+}
+
+// ---------------------------------------------------------------
+// Charts
+// ---------------------------------------------------------------
+Chart.defaults.color = "#b3a89b";
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = "#332c26";
+
+let volumeChart, cashChart;
+
+function renderCharts(timeline){
+  const labels = timeline.map(t => t.date);
+  const volumes = timeline.map(t => t.volume);
+  const cash = timeline.map(t => t.cumCash);
+
+  if (volumeChart) volumeChart.destroy();
+  volumeChart = new Chart(document.getElementById('volumeChart'), {
+    type: 'line',
+    data: { labels, datasets: [{
+      data: volumes, borderColor: '#ffb454', backgroundColor: 'rgba(255,122,26,0.15)',
+      fill: true, stepped: true, pointRadius: 4, pointBackgroundColor:'#ffb454', borderWidth:2.5
+    }]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ` ${ctx.raw.toLocaleString()} units` } } },
+      scales:{ x:{ grid:{color:'#221d19'} }, y:{ ticks:{ callback: v=>v.toLocaleString() }, grid:{color:'#221d19'} } }
+    }
+  });
+
+  if (cashChart) cashChart.destroy();
+  cashChart = new Chart(document.getElementById('cashChart'), {
+    type: 'line',
+    data: { labels, datasets: [{
+      data: cash, borderColor: '#5fb3c7', backgroundColor: 'rgba(95,179,199,0.15)',
+      fill: true, stepped: true, pointRadius: 4, pointBackgroundColor:'#5fb3c7', borderWidth:2.5
+    }]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ` $${ctx.raw.toLocaleString()}` } } },
+      scales:{ x:{ grid:{color:'#221d19'} }, y:{ ticks:{ callback: v=>'$'+v.toLocaleString() }, grid:{color:'#221d19'} } }
+    }
+  });
+}
+
+// ---------------------------------------------------------------
+// Main compute / render
+// ---------------------------------------------------------------
+function compute(){
+  const rows = [...tbody.querySelectorAll('tr')];
+  const events = rows.map(tr => ({
+    date: tr.querySelector('.ev-date').value,
+    type: tr.querySelector('.ev-type').value,
+    volume: parseFloat(tr.querySelector('.ev-volume').value) || 0,
+    price: parseFloat(tr.querySelector('.ev-price').value) || 0,
+  })).filter(e => e.date);
+
+  const maxRate = parseFloat(document.getElementById('maxRate').value) || 0;
+  const maxVol = parseFloat(document.getElementById('maxVol').value) || 0;
+  const storageCost = parseFloat(document.getElementById('storageCost').value) || 0;
+  const handlingFee = parseFloat(document.getElementById('handlingFee').value) || 0;
+  const otherCost = parseFloat(document.getElementById('otherCost').value) || 0;
+
+  const valueEl = document.getElementById('contractValue');
+  const errEl = document.getElementById('errMsg');
+  const breakdownEl = document.getElementById('breakdown');
+
+  if (events.length === 0){
+    valueEl.textContent = '$0';
+    errEl.textContent = '';
+    breakdownEl.innerHTML = '';
+    return;
+  }
+
+  try {
+    const r = priceContract(events, maxRate, maxVol, storageCost, handlingFee, otherCost);
+    errEl.textContent = '';
+    valueEl.textContent = (r.contractValue < 0 ? '-$' : '$') + Math.abs(r.contractValue).toLocaleString(undefined, {maximumFractionDigits:0});
+    valueEl.className = 'value ' + (r.contractValue >= 0 ? 'pos' : 'neg');
+
+    breakdownEl.innerHTML = `
+      <div><div class="l">Sale Revenue</div><div class="v">$${r.totalSale.toLocaleString()}</div></div>
+      <div><div class="l">Purchase Cost</div><div class="v">−$${r.totalPurchase.toLocaleString()}</div></div>
+      <div><div class="l">Storage Cost</div><div class="v">−$${r.totalStorage.toLocaleString()}</div></div>
+      <div><div class="l">Handling/Other</div><div class="v">−$${r.totalHandling.toLocaleString()}</div></div>
+    `;
+    renderCharts(r.timeline);
+  } catch (e){
+    errEl.textContent = '⚠ ' + e.message;
+    valueEl.textContent = 'N/A';
+    valueEl.className = 'value neg';
+    breakdownEl.innerHTML = '';
+  }
+}
+
+compute();
+</script>
+</body>
+</html>
